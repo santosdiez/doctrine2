@@ -1153,8 +1153,8 @@ abstract class AbstractQuery
 
         if(isset($metadata->subClasses)) {
             // Process subclasses recursively
-            foreach ($metadata->subClasses as $key => $subclass) {
-                $timestamps = array_merge($timestamps, $this->getCachedTimestamps($subclass));
+            foreach ($metadata->subClasses as $key => $subClass) {
+                $timestamps = array_merge($timestamps, $this->getCachedTimestamps($subClass));
             }
         }
 
