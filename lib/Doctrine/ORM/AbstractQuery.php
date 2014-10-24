@@ -172,7 +172,7 @@ abstract class AbstractQuery
         $this->hasCache     = $this->_em->getConfiguration()->isSecondLevelCacheEnabled();
 
         if ($this->hasCache) {
-            $cacheConfig            = $configuration->getSecondLevelCacheConfiguration();
+            $cacheConfig            = $em->getConfiguration()->getSecondLevelCacheConfiguration();
             $cacheFactory           = $cacheConfig->getCacheFactory();
             $this->timestampRegion  = $cacheFactory->getTimestampRegion();
             $this->cacheLogger      = $cacheConfig->getCacheLogger();
