@@ -631,10 +631,6 @@ large collections.
 
     $birthdayUsers = $userCollection->matching($criteria);
 
-.. note::
-
-    Matching Criteria only works on OneToMany associations.
-    
 .. tip::
 
     You can move the access of slices of collections into dedicated methods of
@@ -706,6 +702,7 @@ methods:
 * ``isNull($field)``
 * ``in($field, array $values)``
 * ``notIn($field, array $values)``
+* ``contains($field, $value)``
 
 
 .. note::

@@ -1,5 +1,21 @@
 # Upgrade to 2.5
 
+## Minor BC BREAK: Custom Hydrators API change
+
+As of 2.5, `AbstractHydrator` does not enforce the usage of cache as part of
+API, and now provides you a clean API for column information through the method
+`hydrateColumnInfo($column)`.
+Cache variable being passed around by reference is no longer needed since
+Hydrators are per query instantiated since Doctrine 2.4.
+
+## Minor BC BREAK: Entity based ``EntityManager#clear()`` calls follow cascade detach
+
+Whenever ``EntityManager#clear()`` method gets called with a given entity class
+name, until 2.4, it was only detaching the specific requested entity.
+As of 2.5, ``EntityManager`` will follow configured cascades, providing a better
+memory management since associations will be garbage collected, optimizing
+resources consumption on long running jobs.
+
 ## BC BREAK: NamingStrategy has a new method ``embeddedFieldToColumnName($propertyName, $embeddedColumnName)``
 
 This method generates the column name for fields of embedded objects. If you implement your custom NamingStrategy, you
@@ -49,6 +65,16 @@ This in fact is really a minor BC BREAK and should not have any affect on databa
 other than SQL Server because it is the only one that supports and therefore cares about
 ``LockMode::NONE``. It's really just a FIX for SQL Server environments using ORM.
 
+## Minor BC BREAK: `__clone` method not called anymore when entities are instantiated via metadata API
+
+As of PHP 5.6, instantiation of new entities is deferred to the
+[`doctrine/instantiator`](https://github.com/doctrine/instantiator) library, which will avoid calling `__clone`
+or any public API on instantiated objects.
+
+## BC BREAK: `Doctrine\ORM\Repository\DefaultRepositoryFactory` is now `final`
+
+Please implement the `Doctrine\ORM\Repository\RepositoryFactory` interface instead of extending
+the `Doctrine\ORM\Repository\DefaultRepositoryFactory`.
 
 # Upgrade to 2.4
 

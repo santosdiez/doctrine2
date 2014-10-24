@@ -95,7 +95,7 @@ class QueryBuilder
      *
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
-    private $parameters = array();
+    private $parameters;
 
     /**
      * The index of the first result to retrieve.
@@ -1026,7 +1026,7 @@ class QueryBuilder
      *
      * @see where()
      */
-    public function andWhere($where)
+    public function andWhere()
     {
         $args  = func_get_args();
         $where = $this->getDQLPart('where');
@@ -1059,7 +1059,7 @@ class QueryBuilder
      *
      * @see where()
      */
-    public function orWhere($where)
+    public function orWhere()
     {
         $args  = func_get_args();
         $where = $this->getDqlPart('where');

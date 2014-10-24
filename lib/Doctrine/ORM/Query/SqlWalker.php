@@ -291,7 +291,8 @@ class SqlWalker implements TreeWalker
         $tableName .= ($dqlAlias) ? '@[' . $dqlAlias . ']' : '';
 
         if ( ! isset($this->tableAliasMap[$tableName])) {
-            $this->tableAliasMap[$tableName] = strtolower(substr($tableName, 0, 1)) . $this->tableAliasCounter++ . '_';
+            $this->tableAliasMap[$tableName] = (preg_match('/[a-z]/i', $tableName[0]) ? strtolower($tableName[0]) : 't')
+                . $this->tableAliasCounter++ . '_';
         }
 
         return $this->tableAliasMap[$tableName];
@@ -753,12 +754,20 @@ class SqlWalker implements TreeWalker
                 $owningClass   = (isset($assoc['inherited'])) ? $this->em->getClassMetadata($assoc['inherited']) : $class;
                 $sqlTableAlias = $this->getSQLTableAlias($owningClass->getTableName(), $dqlAlias);
 
-                foreach ($assoc['targetToSourceKeyColumns'] as $srcColumn) {
+                $targetClass = $this->em->getClassMetadata($assoc['targetEntity']);
+
+                foreach ($assoc['targetToSourceKeyColumns'] as $targetColumn => $srcColumn) {
                     $columnAlias = $this->getSQLColumnAlias($srcColumn);
 
+                    $type                   = null;
+                    $isIdentifier           = (isset($assoc['id']) && $assoc['id'] === true);
                     $sqlSelectExpressions[] = $sqlTableAlias . '.' . $srcColumn . ' AS ' . $columnAlias;
 
-                    $this->rsm->addMetaResult($dqlAlias, $columnAlias, $srcColumn, (isset($assoc['id']) && $assoc['id'] === true));
+                    if (isset($targetClass->fieldNames[$targetColumn])) {
+                        $type = $targetClass->fieldMappings[$targetClass->fieldNames[$targetColumn]]['type'];
+                    }
+
+                    $this->rsm->addMetaResult($dqlAlias, $columnAlias, $srcColumn, $isIdentifier, $type);
                 }
             }
 
@@ -803,30 +812,54 @@ class SqlWalker implements TreeWalker
         $sqlParts = array();
 
         foreach ($identificationVarDecls as $identificationVariableDecl) {
-            $sql = $this->walkRangeVariableDeclaration($identificationVariableDecl->rangeVariableDeclaration);
-
-            foreach ($identificationVariableDecl->joins as $join) {
-                $sql .= $this->walkJoin($join);
-            }
-
-            if ($identificationVariableDecl->indexBy) {
-                $alias = $identificationVariableDecl->indexBy->simpleStateFieldPathExpression->identificationVariable;
-                $field = $identificationVariableDecl->indexBy->simpleStateFieldPathExpression->field;
-
-                if (isset($this->scalarFields[$alias][$field])) {
-                    $this->rsm->addIndexByScalar($this->scalarFields[$alias][$field]);
-                } else {
-                    $this->rsm->addIndexBy(
-                        $identificationVariableDecl->indexBy->simpleStateFieldPathExpression->identificationVariable,
-                        $identificationVariableDecl->indexBy->simpleStateFieldPathExpression->field
-                    );
-                }
-            }
-
-            $sqlParts[] = $sql;
+            $sqlParts[] = $this->walkIdentificationVariableDeclaration($identificationVariableDecl);
         }
 
         return ' FROM ' . implode(', ', $sqlParts);
+    }
+
+    /**
+     * Walks down a IdentificationVariableDeclaration AST node, thereby generating the appropriate SQL.
+     *
+     * @param AST\IdentificationVariableDeclaration $identificationVariableDecl
+     *
+     * @return string
+     */
+    public function walkIdentificationVariableDeclaration($identificationVariableDecl)
+    {
+        $sql = $this->walkRangeVariableDeclaration($identificationVariableDecl->rangeVariableDeclaration);
+
+        if ($identificationVariableDecl->indexBy) {
+            $this->walkIndexBy($identificationVariableDecl->indexBy);
+        }
+
+        foreach ($identificationVariableDecl->joins as $join) {
+            $sql .= $this->walkJoin($join);
+        }
+
+        return $sql;
+    }
+
+    /**
+     * Walks down a IndexBy AST node.
+     *
+     * @param AST\IndexBy $indexBy
+     *
+     * @return void
+     */
+    public function walkIndexBy($indexBy)
+    {
+        $pathExpression = $indexBy->simpleStateFieldPathExpression;
+        $alias          = $pathExpression->identificationVariable;
+        $field          = $pathExpression->field;
+
+        if (isset($this->scalarFields[$alias][$field])) {
+            $this->rsm->addIndexByScalar($this->scalarFields[$alias][$field]);
+
+            return;
+        }
+
+        $this->rsm->addIndexBy($alias, $field);
     }
 
     /**
@@ -1017,10 +1050,7 @@ class SqlWalker implements TreeWalker
         // Apply the indexes
         if ($indexBy) {
             // For Many-To-One or One-To-One associations this obviously makes no sense, but is ignored silently.
-            $this->rsm->addIndexBy(
-                $indexBy->simpleStateFieldPathExpression->identificationVariable,
-                $indexBy->simpleStateFieldPathExpression->field
-            );
+            $this->walkIndexBy($indexBy);
         } else if (isset($relation['indexBy'])) {
             $this->rsm->addIndexBy($joinedDqlAlias, $relation['indexBy']);
         }
@@ -1456,16 +1486,10 @@ class SqlWalker implements TreeWalker
     public function walkSubselectFromClause($subselectFromClause)
     {
         $identificationVarDecls = $subselectFromClause->identificationVariableDeclarations;
-        $sqlParts = array ();
+        $sqlParts               = array ();
 
         foreach ($identificationVarDecls as $subselectIdVarDecl) {
-            $sql = $this->walkRangeVariableDeclaration($subselectIdVarDecl->rangeVariableDeclaration);
-
-            foreach ($subselectIdVarDecl->joins as $join) {
-                $sql .= $this->walkJoin($join);
-            }
-
-            $sqlParts[] = $sql;
+            $sqlParts[] = $this->walkIdentificationVariableDeclaration($subselectIdVarDecl);
         }
 
         return ' FROM ' . implode(', ', $sqlParts);
@@ -1503,24 +1527,25 @@ class SqlWalker implements TreeWalker
         foreach ($newObjectExpression->args as $argIndex => $e) {
             $resultAlias = $this->scalarResultCounter++;
             $columnAlias = $this->getSQLColumnAlias('sclr');
+            $fieldType   = 'string';
 
             switch (true) {
                 case ($e instanceof AST\NewObjectExpression):
                     $sqlSelectExpressions[] = $e->dispatch($this);
                     break;
 
-                default:
-                    $sqlSelectExpressions[] = trim($e->dispatch($this)) . ' AS ' . $columnAlias;
+                case ($e instanceof AST\Subselect):
+                    $sqlSelectExpressions[] = '(' . $e->dispatch($this) . ') AS ' . $columnAlias;
                     break;
-            }
 
-            switch (true) {
                 case ($e instanceof AST\PathExpression):
                     $fieldName = $e->field;
                     $dqlAlias  = $e->identificationVariable;
                     $qComp     = $this->queryComponents[$dqlAlias];
                     $class     = $qComp['metadata'];
                     $fieldType = $class->getTypeOfField($fieldName);
+
+                    $sqlSelectExpressions[] = trim($e->dispatch($this)) . ' AS ' . $columnAlias;
                     break;
 
                 case ($e instanceof AST\Literal):
@@ -1533,10 +1558,12 @@ class SqlWalker implements TreeWalker
                             $fieldType = is_float($e->value) ? 'float' : 'integer';
                             break;
                     }
+
+                    $sqlSelectExpressions[] = trim($e->dispatch($this)) . ' AS ' . $columnAlias;
                     break;
 
                 default:
-                    $fieldType = 'string';
+                    $sqlSelectExpressions[] = trim($e->dispatch($this)) . ' AS ' . $columnAlias;
                     break;
             }
 
@@ -1950,7 +1977,7 @@ class SqlWalker implements TreeWalker
                     $this->parserResult->addParameterMapping($dqlParamKey, $this->sqlParamIndex++);
                 }
 
-                $sqlParts[] = $targetTableAlias . '.' . $targetColumnName . ' = ' . $entitySql;
+                $sqlParts[] = $targetTableAlias . '.' . $targetColumnName . ' IN (' . $entitySql . ')';
             }
 
             $sql .= implode(' AND ', $sqlParts);

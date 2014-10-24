@@ -81,30 +81,47 @@ discriminator column is used.
 
 Example:
 
-.. code-block:: php
+.. configuration-block::
 
-    <?php
-    namespace MyProject\Model;
+    .. code-block:: php
     
-    /**
-     * @Entity
-     * @InheritanceType("SINGLE_TABLE")
-     * @DiscriminatorColumn(name="discr", type="string")
-     * @DiscriminatorMap({"person" = "Person", "employee" = "Employee"})
-     */
-    class Person
-    {
-        // ...
-    }
-    
-    /**
-     * @Entity
-     */
-    class Employee extends Person
-    {
-        // ...
-    }
+        <?php
+        namespace MyProject\Model;
+        
+        /**
+         * @Entity
+         * @InheritanceType("SINGLE_TABLE")
+         * @DiscriminatorColumn(name="discr", type="string")
+         * @DiscriminatorMap({"person" = "Person", "employee" = "Employee"})
+         */
+        class Person
+        {
+            // ...
+        }
+        
+        /**
+         * @Entity
+         */
+        class Employee extends Person
+        {
+            // ...
+        }
 
+    .. code-block:: yaml
+    
+        MyProject\Model\Person:
+          type: entity
+          inheritanceType: SINGLE_TABLE
+          discriminatorColumn:
+            name: discr
+            type: string
+          discriminatorMap:
+            person: Person
+            employee: Employee
+                
+        MyProject\Model\Employee:
+          type: entity
+            
 Things to note:
 
 
@@ -123,6 +140,9 @@ Things to note:
    be fully qualified if the classes are contained in the same
    namespace as the entity class on which the discriminator map is
    applied.
+-  If no discriminator map is provided, then the map is generated
+   automatically. The automatically generated discriminator map 
+   contains the lowercase short name of each class as key.
 
 Design-time considerations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -210,6 +230,9 @@ Things to note:
    be fully qualified if the classes are contained in the same
    namespace as the entity class on which the discriminator map is
    applied.
+-  If no discriminator map is provided, then the map is generated
+   automatically. The automatically generated discriminator map 
+   contains the lowercase short name of each class as key.
 
 .. note::
 
@@ -559,8 +582,8 @@ Could be used by an entity that extends a mapped superclass to override a field 
 Things to note:
 
 -  The "attribute override" specifies the overrides base on the property name.
--  The column type *CANNOT* be changed. if the column type is not equals you got a ``MappingException``
--  The override can redefine all the column except the type.
+-  The column type *CANNOT* be changed. If the column type is not equal you get a ``MappingException``
+-  The override can redefine all the columns except the type.
 
 Query the Type
 --------------
